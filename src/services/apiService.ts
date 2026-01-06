@@ -1,23 +1,38 @@
-import { GraphData } from '../types/graph';
-// 假设你把 Python 生成的 json 放到了 public/data/graph.json
-// 或者在开发阶段直接 import 一个本地的 mock json 文件
-// import localData from '../../public/data/graph.json'; 
+// 门户层只需要知道这些通用信息
+export interface ProjectMetadata {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  // 新增：项目类型。决定了点进去后跳转到哪个渲染器
+  type: '3d-network' | '2d-chart' | 'volume-render'; 
+  dataUrl: string; // 数据源地址，具体格式由具体页面自己去解析
+}
+
+const MOCK_PROJECTS: ProjectMetadata[] = [
+  {
+    id: 'materials-net-01',
+    title: 'Materials Genome Network',
+    description: '材料成分-结构-性能关联网络。',
+    thumbnail: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&q=80',
+    type: '3d-network', // <--- 标记这是个 3D 网络项目
+    dataUrl: '/data/graph.json',
+  },
+  {
+    id: 'future-project-02',
+    title: 'Experimental Data Charts',
+    description: '未来可能添加的普通图表项目。',
+    thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80',
+    type: '2d-chart', // <--- 标记这是个 2D 图表项目
+    dataUrl: '/data/stats.json',
+  }
+];
 
 export const apiService = {
-  /**
-   * 获取图谱数据
-   * Phase 1: 读取本地静态文件
-   * Future: 替换为真实的 API fetch
-   */
-  fetchGraphData: async (): Promise<GraphData> => {
-    // 模拟网络延迟，让加载状态可见
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // 真实场景下使用 fetch 读取 public 文件夹下的资源
-    const response = await fetch('/data/graph.json');
-    if (!response.ok) {
-      throw new Error('Failed to load graph data');
-    }
-    return response.json();
-  }
+  fetchProjectsList: async (): Promise<ProjectMetadata[]> => {
+    return new Promise((resolve) => resolve(MOCK_PROJECTS));
+  },
+  
+  // 删除 fetchGraphData 的具体实现，或者保留它仅供 3D 网络页面使用
+  // 数据的具体获取逻辑应该下放给具体的 Page 组件
 };
