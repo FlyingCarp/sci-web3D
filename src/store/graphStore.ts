@@ -1,19 +1,5 @@
 import { create } from 'zustand';
-
-// --- 接口定义 ---
-interface GraphNode { id: string; group: string; val: number; x: number; y: number; z: number; color: string; }
-interface GraphLink { source: string; target: string; similarity: number; }
-interface GraphData { nodes: GraphNode[]; links: GraphLink[]; }
-
-interface GraphState {
-  data: GraphData | null;
-  isLoading: boolean;
-  error: string | null;
-  selectedNode: any | null;
-  
-  fetchData: () => Promise<void>;
-  setSelectedNode: (node: any | null) => void;
-}
+import type { GraphNode, GraphLink, GraphState } from '../types/graph';
 
 // --- 常量定义 ---
 const NODE_COUNT = 118;      
@@ -39,7 +25,7 @@ export const useGraphStore = create<GraphState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch('/data/out.bin'); 
+      const response = await fetch('/data/out.bin'); //读取bin文件的节点信息及邻接矩阵
       console.log(`📡 [System] HTTP 状态码: ${response.status}`);
 
       if (!response.ok) throw new Error(`无法读取文件 (HTTP ${response.status})`);
