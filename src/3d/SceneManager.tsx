@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'; // 1. 新增这一行
 import * as THREE from 'three';
 import { UnrealBloomPass } from 'three-stdlib';
 import { CSS3DRenderer, CSS3DObject } from 'three-stdlib';
+import { useHandGesture } from '../hooks/useHandGesture';
+import { GestureController } from '../components/GestureController';
 
 // --- ⚙️ 参数配置 ---
 const SCALE_FACTOR = 200;
@@ -12,6 +14,7 @@ const NODE_REL_SIZE = 4;
 const BLOOM_STRENGTH = 2;
 const BLOOM_RADIUS = 0.4;
 const BLOOM_THRESHOLD = 0.1;
+const GESTURE_ROTATE_SPEED = 0.02; // radians per frame at max hand displacement
 
 const SceneManager: React.FC = () => {
   const navigate = useNavigate(); // 2. 在组件内部第一行初始化
@@ -24,6 +27,9 @@ const SceneManager: React.FC = () => {
   const [appliedThreshold, setAppliedThreshold] = useState(0.82);
   // sliderValue: UI 显示数值 (实时响应，无延迟)
   const [sliderValue, setSliderValue] = useState(0.82);
+
+  // --- 🤚 手势控制 ---
+  const gesture = useHandGesture();
 
   // --- Refs ---
   // 使用 ReturnType<typeof setTimeout> 自动适配浏览器环境，解决 TS 报错
@@ -81,22 +87,58 @@ const SceneManager: React.FC = () => {
     };
   }, [fetchData]);
 
-  // --- 动画循环 (保持文字面向相机) ---
+  // --- 动画循环 (保持文字面向相机 + 手势旋转) ---
   useEffect(() => {
+    const { deltaRef: gestureDeltaRef } = gesture; // capture ref once (stable identity)
+
+    // Pre-allocate rotation helpers — avoids per-frame GC pressure
+    const _offset     = new THREE.Vector3();
+    const _yawAxis    = new THREE.Vector3(0, 1, 0); // world-up for yaw
+    const _yawQuat    = new THREE.Quaternion();
+    const _pitchQuat  = new THREE.Quaternion();
+    const _cameraRight = new THREE.Vector3();
+
     let frameId: number;
     const animate = () => {
       if (graphRef.current) {
         const camera = graphRef.current.camera();
+
+        // Keep CSS3D labels facing camera
         const cssObjects = cssObjectsRef.current;
         for (let i = 0; i < cssObjects.length; i++) {
           cssObjects[i].quaternion.copy(camera.quaternion);
+        }
+
+        // Gesture: Yaw (Y-axis) + Pitch (camera-right axis). Roll is absent by construction.
+        // Works regardless of controls type (avoids reliance on OrbitControls-private rotateLeft/Up).
+        const { x, y } = gestureDeltaRef.current;
+        if (x !== 0 || y !== 0) {
+          const controls = graphRef.current.controls() as any;
+          if (controls?.target) {
+            // Camera offset relative to orbit target
+            _offset.subVectors(camera.position, controls.target);
+
+            // Yaw: rotate offset around world-Y (negative sign → hand-right shows scene-right)
+            _yawQuat.setFromAxisAngle(_yawAxis, -x * GESTURE_ROTATE_SPEED);
+            _offset.applyQuaternion(_yawQuat);
+
+            // Pitch: rotate offset around camera's current right axis
+            _cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+            _pitchQuat.setFromAxisAngle(_cameraRight, -y * GESTURE_ROTATE_SPEED);
+            _offset.applyQuaternion(_pitchQuat);
+
+            // Apply — controls.update() reads the new position and syncs its internal spherical
+            camera.position.copy(controls.target).add(_offset);
+            camera.lookAt(controls.target);
+            controls.update();
+          }
         }
       }
       frameId = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(frameId);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 数据处理 (核心优化点) ---
   const processedData = useMemo(() => {
@@ -165,6 +207,18 @@ const SceneManager: React.FC = () => {
 
   return (
     <>
+      {/* --- 🤚 手势控制 UI --- */}
+      <GestureController
+        isModelReady={gesture.isModelReady}
+        isEnabled={gesture.isEnabled}
+        isActive={gesture.isActive}
+        hasError={gesture.hasError}
+        onToggle={gesture.toggle}
+        videoRef={gesture.videoRef}
+        palmPos={gesture.palmPos}
+        deadZone={gesture.deadZone}
+      />
+
       {/* --- 🔙 返回首页按钮 (新增) --- */}
       <button
         onClick={() => navigate('/')}
